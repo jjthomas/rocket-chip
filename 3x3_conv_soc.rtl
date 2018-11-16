@@ -1,0 +1,25 @@
+// input image must be padded on top and left
+const COLS = 100;
+
+conv3x3() {
+  bram b1, b2;
+  reg l0, l1, l2, c0, c1, c2;
+  reg col = 0;
+
+  wire b1_out = b1[col];
+  wire b2_out = b2[col];
+
+  l0 <= c0;
+  l1 <= c1;
+  l2 <= c2;
+  c0 <= b1_out;
+  c1 <= b2_out;
+  c2 <= input;
+  b1[col] <= b2_out;
+  b2[col] <= input;
+  emit(conv(l0, l1, l2, c0, c1, c2, b1_out, b2_out, input)); // may be pipelined (with latency PIPE_LATENCY)
+  if (col == COLS - 1)
+    col = 0;
+  else
+    col++;
+}
