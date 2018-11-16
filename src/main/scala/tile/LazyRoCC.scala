@@ -262,7 +262,11 @@ class CharacterCountExampleModuleImp(outer: CharacterCountExample)(implicit p: P
   val recv_beat = Reg(UInt(width = log2Up(cacheDataBeats+1)), init = UInt(0))
 
   val data_bytes = Vec.tabulate(cacheDataBits/8) { i => recv_data(8 * (i + 1) - 1, 8 * i) }
-  val zero_match = data_bytes.map(_ === UInt(0))
+  val zero_match = data_bytes.zipWithIndex.map {
+    case (data_byte, i) =>
+      val idx = Cat(recv_beat - UInt(1), UInt(i, beatOffset))
+      idx >= offset && data_byte === UInt(0)
+  }
   val needle_match = data_bytes.map(_ === needle)
   val first_zero = PriorityEncoder(zero_match)
 
@@ -310,6 +314,7 @@ class CharacterCountExampleModuleImp(outer: CharacterCountExample)(implicit p: P
     when (recv_beat === UInt(cacheDataBeats)) {
       addr := next_addr
       state := Mux(zero_found || finished, s_resp, s_acq)
+      recv_beat := UInt(0)
     } .otherwise {
       state := s_gnt
     }
