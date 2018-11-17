@@ -1,5 +1,5 @@
 // input image must be padded on top and left
-const COLS = 100;
+COLS = 64 // corresponds to BURST_SIZE in the C code
 
 conv3x3() {
   bram b1, b2;

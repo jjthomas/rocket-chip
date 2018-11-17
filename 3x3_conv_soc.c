@@ -1,6 +1,4 @@
-C code:
-
-// parameters to the hardware memory system are size of burst and size of token
+// parameter to the hardware memory system is size of token (in this case 16, the size of short)
 
 #define PIPE_LATENCY 2
 // in terms of shorts
@@ -15,7 +13,8 @@ void call_acc(void *input_burst, void *output_burst, int num_tokens); // output_
 // should probably also have a call_acc_nonblocking call
 
 short input[H * W];
-short output[PIPE_LATENCY + H * W]; // a few garbage outputs at the start and end
+short output_raw[PIPE_LATENCY + H * W]; // a few garbage outputs at the start
+short *output = output_raw - PIPE_LATENCY;
 short edge_buf1[BURST_SIZE];
 short edge_buf2[BURST_SIZE];
 for (int i = 0; i < W; i += STRIP_SIZE) {
@@ -42,6 +41,3 @@ for (int i = 0; i < W; i += STRIP_SIZE) {
     }
   }
 }
-
-
-RTL:
