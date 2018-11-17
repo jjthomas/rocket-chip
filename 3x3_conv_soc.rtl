@@ -1,8 +1,8 @@
 // input image must be padded on top and left
-COLS = 64 // corresponds to BURST_SIZE in the C code
+COLS = 102 // corresponds to STRIP_SIZE + PAD in the C code
 
 conv3x3() {
-  bram b1, b2;
+  bram b1[COLS], b2[COLS];
   reg l0, l1, l2, c0, c1, c2;
   reg col = 0;
 
@@ -18,7 +18,8 @@ conv3x3() {
   b1[col] <= b2_out;
   b2[col] <= input;
   emit(conv(l0, l1, l2, c0, c1, c2, b1_out, b2_out, input)); // may be pipelined (with latency PIPE_LATENCY)
-  if (col == COLS - 1)
+  if (col == <num cols for strip> - 1) // <num cols for strip> should be passed in at the start of each strip ...
+    // ... alternatively always do the right edge case in software
     col = 0;
   else
     col++;
