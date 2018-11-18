@@ -19,10 +19,10 @@ for (int i = 0; i < W; i += STRIP_SIZE) {
     if (j == -PAD) {
       memset(edge_buf1, 0, cur_strip_size + PAD); // top padding
     }
-    int offset = j * W + i;
     if (j < 0) {
       call_acc(edge_buf1, 0, STRIP_SIZE + PAD);
     } else {
+      int offset = j * W + i;
       if (i == 0) {
         memset(edge_buf1, 0, PAD);
       } else {
@@ -36,9 +36,9 @@ for (int i = 0; i < W; i += STRIP_SIZE) {
         memcpy(output + (j - 1) * W + i + cur_strip_size - PIPE_LATENCY, edge_buf2, PIPE_LATENCY);
       }
       call_acc(input + offset + PIPE_LATENCY, output + offset, cur_strip_size - PIPE_LATENCY);
-    }
-    if (j == H - 1) {
-      call_acc(edge_buf2 /* garbage */, output + offset + cur_strip_size - PIPE_LATENCY, PIPE_LATENCY);
+      if (j == H - 1) {
+        call_acc(edge_buf2 /* garbage */, output + offset + cur_strip_size - PIPE_LATENCY, PIPE_LATENCY);
+      }
     }
   }
 }
