@@ -127,6 +127,16 @@ int conv_slow(short *in, short *out)
   return sum;
 }
 
+int cache_test(short *in, short *out) {
+  int sum = 0;
+  for (int i = 0; i < 1000; i++) {
+    for (int j = 0; j < 20; j++) {
+      sum += in[j];
+    }
+  }
+  return sum;
+}
+
 //--------------------------------------------------------------------------
 // Main
 
