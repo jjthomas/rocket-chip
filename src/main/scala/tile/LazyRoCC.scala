@@ -351,9 +351,9 @@ class CGRAWrapperModuleImp(outer: CGRAWrapper)(implicit p: Parameters) extends L
   val resp_rd = Reg(io.resp.bits.rd)
 
   val addr_block = addr(coreMaxAddrBits - 1, blockOffset)
-  val offset = addr(blockOffset - 1, beatOffset)
+  val addr_beat = addr(blockOffset - 1, beatOffset)
   val end_addr_block = end_addr(coreMaxAddrBits - 1, blockOffset)
-  val end_offset = end_addr(blockOffset - 1, beatOffset)
+  val end_beat = end_addr(blockOffset - 1, beatOffset)
   val next_addr = (addr_block + UInt(1)) << UInt(blockOffset)
 
   val s_idle :: s_acq :: s_gnt :: s_fill :: s_resp :: Nil = Enum(Bits(), 5)
@@ -395,10 +395,10 @@ class CGRAWrapperModuleImp(outer: CGRAWrapper)(implicit p: Parameters) extends L
     state := s_fill
   }
 
-  val cur_finished = addr_block === end_addr_block && offset > end_offset
-  val next_finished = addr_block === end_addr_block && offset >= end_offset
+  val cur_finished = addr_block === end_addr_block && recv_beat > end_beat
+  val next_finished = addr_block === end_addr_block && recv_beat >= end_beat
   when (state === s_fill) {
-    when (cur_finished || cycle_counter === cycles_per_beat) {
+    when (recv_beat < addr_beat || cur_finished || cycle_counter === cycles_per_beat) {
       when (recv_beat === UInt(cacheDataBeats)) {
         addr := next_addr
         state := Mux(next_finished, s_resp, s_acq)
