@@ -45,25 +45,28 @@ void* memset(void* dest, int byte, size_t len);
 short input[H * W];
 short output[H * W];
 
-void call_acc(short *input_burst, short *output_burst, int num_tokens) {
-  int unused_result;
+int call_acc(short *input_burst, short *output_burst, int num_tokens) {
+  int result;
   asm volatile ("fence");
-  CUSTOMX_R_R_R(1, unused_result, input_burst, num_tokens * 2 /* num_tokens in terms of 16-bit tokens */, 1)
+  CUSTOMX_R_R_R(1, result, input_burst, num_tokens * 2 /* num_tokens in terms of 16-bit tokens */, 1)
   asm volatile ("fence");
+  return result;
 }
 
-void config_acc() {
-  int unused_result;
+int config_acc() {
+  int result;
   int throughput = 16; // cycles per 64-bit word
   asm volatile ("fence");
-  CUSTOMX_R_R_R(1, unused_result, throughput, unused_result, 0)
+  CUSTOMX_R_R_R(1, result, throughput, result, 0)
   asm volatile ("fence");
+  return result;
 }
 
 int conv_fastest(short *in, short *out) {
-  config_acc();
-  call_acc(in, out, H * W);
-  return 0;
+  int result = 0;
+  result += config_acc();
+  result += call_acc(in, out, H * W);
+  return result;
 }
 
 inline int min(int x, int y) {
@@ -71,7 +74,8 @@ inline int min(int x, int y) {
 }
 
 int conv_faster(short *in, short *out) {
-  config_acc();
+  int result = 0;
+  result += config_acc();
 
   short edge_buf1[STRIP_SIZE + PAD];
   short edge_buf2[PIPE_LATENCY + PAD];
@@ -82,7 +86,7 @@ int conv_faster(short *in, short *out) {
         memset(edge_buf1, 0, sizeof(short) * (cur_strip_size + PAD)); // top padding
       }
       if (j < 0) {
-        call_acc(edge_buf1, 0, STRIP_SIZE + PAD);
+        result += call_acc(edge_buf1, 0, STRIP_SIZE + PAD);
       } else {
         int offset = j * W + i;
         if (i == 0) {
@@ -90,21 +94,21 @@ int conv_faster(short *in, short *out) {
         } else {
           memcpy(edge_buf1, input + offset - PAD, sizeof(short) * PAD);
         }
-        call_acc(edge_buf1, edge_buf2, PAD);
+        result += call_acc(edge_buf1, edge_buf2, PAD);
         // assert(cur_strip_size >= PIPE_LATENCY); // important to check this condition for the right edge ...
         // ... if it doesn't hold maybe do the computation in software?
-        call_acc(input + offset, edge_buf2 + PAD, PIPE_LATENCY);
+        result += call_acc(input + offset, edge_buf2 + PAD, PIPE_LATENCY);
         if (j > 0) {
           memcpy(output + (j - 1) * W + i + cur_strip_size - PIPE_LATENCY, edge_buf2, sizeof(short) * PIPE_LATENCY);
         }
-        call_acc(input + offset + PIPE_LATENCY, output + offset, cur_strip_size - PIPE_LATENCY);
+        result += call_acc(input + offset + PIPE_LATENCY, output + offset, cur_strip_size - PIPE_LATENCY);
         if (j == H - 1) {
-          call_acc(edge_buf2 /* garbage */, output + offset + cur_strip_size - PIPE_LATENCY, PIPE_LATENCY);
+          result += call_acc(edge_buf2 /* garbage */, output + offset + cur_strip_size - PIPE_LATENCY, PIPE_LATENCY);
         }
       }
     }
   }
-  return 0;
+  return result;
 }
 
 int conv_slow(short *in, short *out)
