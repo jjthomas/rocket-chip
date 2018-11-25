@@ -378,12 +378,13 @@ class CGRAWrapperModuleImp(outer: CGRAWrapper)(implicit p: Parameters) extends L
   when (io.cmd.fire()) {
     when (io.cmd.bits.inst.funct === UInt(0)) {
       cycles_per_beat := io.cmd.bits.rs1 - UInt(1) // there is always at least one cycle
+      state := s_resp
     } .otherwise {
       addr := io.cmd.bits.rs1
       end_addr := io.cmd.bits.rs1 + io.cmd.bits.rs2
-      resp_rd := io.cmd.bits.inst.rd
       state := s_acq
     }
+    resp_rd := io.cmd.bits.inst.rd
   }
 
   when (tl_out.a.fire()) { state := s_gnt }
