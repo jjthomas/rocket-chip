@@ -347,7 +347,7 @@ class CGRAWrapperModuleImp(outer: CGRAWrapper)(implicit p: Parameters) extends L
   val addr = Reg(UInt(width = coreMaxAddrBits))
   val end_addr = Reg(UInt(width = coreMaxAddrBits))
   val cycles_per_beat = Reg(UInt(width = 16))
-  val cycle_counter = Reg(UInt(width = 16))
+  val cycle_counter = RegInit(0.asUInt(16.W))
   val resp_rd = Reg(io.resp.bits.rd)
 
   val addr_block = addr(coreMaxAddrBits - 1, blockOffset)
@@ -363,8 +363,6 @@ class CGRAWrapperModuleImp(outer: CGRAWrapper)(implicit p: Parameters) extends L
   val gnt = tl_out.d.bits
   val recv_data = Reg(UInt(width = cacheDataBits))
   val recv_beat = Reg(UInt(width = log2Up(cacheDataBeats+1)), init = UInt(0))
-
-  val finished = Reg(Bool())
 
   io.cmd.ready := (state === s_idle)
   io.resp.valid := (state === s_resp)
@@ -384,8 +382,6 @@ class CGRAWrapperModuleImp(outer: CGRAWrapper)(implicit p: Parameters) extends L
       addr := io.cmd.bits.rs1
       end_addr := io.cmd.bits.rs1 + io.cmd.bits.rs2
       resp_rd := io.cmd.bits.inst.rd
-      cycle_counter := UInt(0)
-      finished := Bool(false)
       state := s_acq
     }
   }
@@ -398,18 +394,20 @@ class CGRAWrapperModuleImp(outer: CGRAWrapper)(implicit p: Parameters) extends L
     state := s_fill
   }
 
+  val cur_finished = addr_block === end_addr_block && offset > end_offset
+  val next_finished = addr_block === end_addr_block && offset >= end_offset
   when (state === s_fill) {
-    when (recv_beat === UInt(cacheDataBeats)) {
-      addr := next_addr
-      state := Mux(finished, s_resp, s_acq)
-      recv_beat := UInt(0)
-    } .otherwise {
-      when (finished || cycle_counter === cycles_per_beat) {
-        state := s_gnt
-        finished := addr_block === end_addr_block && offset >= end_offset
+    when (cur_finished || cycle_counter === cycles_per_beat) {
+      when (recv_beat === UInt(cacheDataBeats)) {
+        addr := next_addr
+        state := Mux(next_finished, s_resp, s_acq)
+        recv_beat := UInt(0)
       } .otherwise {
-        cycle_counter := cycle_counter + UInt(1)
+        state := s_gnt
       }
+      cycle_counter := UInt(0)
+    } .otherwise {
+      cycle_counter := cycle_counter + UInt(1)
     }
   }
 
