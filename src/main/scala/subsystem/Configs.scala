@@ -204,8 +204,8 @@ class WithRoccExample extends Config((site, here, up) => {
         accumulator
     },
     (p: Parameters) => {
-        val translator = LazyModule(new TranslatorExample(OpcodeSet.custom1)(p))
-        translator
+        val cgra = LazyModule(new CGRAWrapper(OpcodeSet.custom1)(p))
+        cgra
     },
     (p: Parameters) => {
         val counter = LazyModule(new CharacterCountExample(OpcodeSet.custom2)(p))

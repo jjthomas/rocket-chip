@@ -331,6 +331,99 @@ class CharacterCountExampleModuleImp(outer: CharacterCountExample)(implicit p: P
   tl_out.e.valid := Bool(false)
 }
 
+class  CGRAWrapper(opcodes: OpcodeSet)(implicit p: Parameters) extends LazyRoCC(opcodes) {
+  override lazy val module = new CGRAWrapperModuleImp(this)
+  override val atlNode = TLClientNode(Seq(TLClientPortParameters(Seq(TLClientParameters("CGRARoCC")))))
+}
+
+class CGRAWrapperModuleImp(outer: CGRAWrapper)(implicit p: Parameters) extends LazyRoCCModuleImp(outer)
+  with HasCoreParameters
+  with HasL1CacheParameters {
+  val cacheParams = tileParams.icache.get
+
+  private val blockOffset = blockOffBits
+  private val beatOffset = log2Up(cacheDataBits/8)
+
+  val addr = Reg(UInt(width = coreMaxAddrBits))
+  val end_addr = Reg(UInt(width = coreMaxAddrBits))
+  val cycles_per_beat = Reg(UInt(width = 16))
+  val cycle_counter = Reg(UInt(width = 16))
+  val resp_rd = Reg(io.resp.bits.rd)
+
+  val addr_block = addr(coreMaxAddrBits - 1, blockOffset)
+  val offset = addr(blockOffset - 1, beatOffset)
+  val end_addr_block = end_addr(coreMaxAddrBits - 1, blockOffset)
+  val end_offset = end_addr(blockOffset - 1, beatOffset)
+  val next_addr = (addr_block + UInt(1)) << UInt(blockOffset)
+
+  val s_idle :: s_acq :: s_gnt :: s_fill :: s_resp :: Nil = Enum(Bits(), 5)
+  val state = Reg(init = s_idle)
+
+  val (tl_out, edgesOut) = outer.atlNode.out(0)
+  val gnt = tl_out.d.bits
+  val recv_data = Reg(UInt(width = cacheDataBits))
+  val recv_beat = Reg(UInt(width = log2Up(cacheDataBeats+1)), init = UInt(0))
+
+  val finished = Reg(Bool())
+
+  io.cmd.ready := (state === s_idle)
+  io.resp.valid := (state === s_resp)
+  io.resp.bits.rd := resp_rd
+  io.resp.bits.data := UInt(0) // dummy value
+  tl_out.a.valid := (state === s_acq)
+  tl_out.a.bits := edgesOut.Get(
+    fromSource = UInt(0),
+    toAddress = addr_block << blockOffset,
+    lgSize = UInt(lgCacheBlockBytes))._2
+  tl_out.d.ready := (state === s_gnt)
+
+  when (io.cmd.fire()) {
+    when (io.cmd.bits.inst.funct === UInt(0)) {
+      cycles_per_beat := io.cmd.bits.rs1 - UInt(1) // there is always at least one cycle
+    } .otherwise {
+      addr := io.cmd.bits.rs1
+      end_addr := io.cmd.bits.rs1 + io.cmd.bits.rs2
+      resp_rd := io.cmd.bits.inst.rd
+      cycle_counter := UInt(0)
+      finished := Bool(false)
+      state := s_acq
+    }
+  }
+
+  when (tl_out.a.fire()) { state := s_gnt }
+
+  when (tl_out.d.fire()) {
+    recv_beat := recv_beat + UInt(1)
+    recv_data := gnt.data
+    state := s_fill
+  }
+
+  when (state === s_fill) {
+    when (recv_beat === UInt(cacheDataBeats)) {
+      addr := next_addr
+      state := Mux(finished, s_resp, s_acq)
+      recv_beat := UInt(0)
+    } .otherwise {
+      when (finished || cycle_counter === cycles_per_beat) {
+        state := s_gnt
+        finished := addr_block === end_addr_block && offset >= end_offset
+      } .otherwise {
+        cycle_counter := cycle_counter + UInt(1)
+      }
+    }
+  }
+
+  when (io.resp.fire()) { state := s_idle }
+
+  io.busy := (state =/= s_idle)
+  io.interrupt := Bool(false)
+  io.mem.req.valid := Bool(false)
+  // Tie off unused channels
+  tl_out.b.ready := Bool(true)
+  tl_out.c.valid := Bool(false)
+  tl_out.e.valid := Bool(false)
+}
+
 class OpcodeSet(val opcodes: Seq[UInt]) {
   def |(set: OpcodeSet) =
     new OpcodeSet(this.opcodes ++ set.opcodes)
